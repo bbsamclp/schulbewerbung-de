@@ -1,0 +1,16 @@
+# Sensible Schülerdaten
+*.csv
+
+# Generierte Ausgabedateien
+*.xlsx
+*.xls
+*.pdf
+
+# LaTeX-Zwischendateien
+*.tex
+*.aux
+*.log
+*.out
+
+# Editor Lock-Dateien
+.~lock.*
