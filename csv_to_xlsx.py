@@ -17,7 +17,7 @@ from openpyxl import Workbook
 from openpyxl.styles import Font, Alignment, PatternFill, Border, Side
 
 GRADES_COLUMN = "BewerbungenZusatzfragenBeantworteteFragenPflicht"
-GROUP_COLUMN = "Schüler:in Bildungsgang Kuerzel"
+GROUP_COLUMN = "Schüler:in Bildungsangebot Vollqualifizierter Schlüssel"
 
 BASE_FIELDS = [
     ("Schüler:in Anrede Bezeichnung", "Anrede"),
