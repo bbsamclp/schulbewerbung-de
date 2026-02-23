@@ -28,6 +28,9 @@ BASE_FIELDS = [
     ("Schüler:in Bewerbung Prioritaetsrang", "Rang"),
 ]
 
+# Extra field inserted at position 4 (5th column) for FG groups
+FG_EXTRA_FIELD = ("Schüler:in abgebende Schule Schulgliederung", "Schulgliederung")
+
 FIELD_TRANSFORMS = {
     "Schüler:in Sonderpädagogischer Förderbedarf": lambda v: "X" if v == "J" else "",
 }
@@ -94,8 +97,13 @@ def read_csv(csv_path):
     raise RuntimeError(f"Konnte {csv_path} mit keinem Encoding lesen.")
 
 
-def write_xlsx(records, xlsx_path):
+def write_xlsx(records, xlsx_path, is_fg=False):
     """Schreibt eine Liste von Datensätzen als XLSX."""
+    # Basis-Felder ggf. um Schulgliederung erweitern
+    base_fields = list(BASE_FIELDS)
+    if is_fg:
+        base_fields.insert(4, FG_EXTRA_FIELD)
+
     # Noten-Spalten aus allen Datensätzen dieser Gruppe sammeln
     all_answer_cols = []
     for rec in records:
@@ -109,7 +117,7 @@ def write_xlsx(records, xlsx_path):
     ws.title = "Bewerber"
 
     # Header
-    header_labels = [label for _, label in BASE_FIELDS] + all_answer_cols
+    header_labels = [label for _, label in base_fields] + all_answer_cols
     header_font = Font(bold=True)
     header_fill = PatternFill(start_color="D9E1F2", end_color="D9E1F2", fill_type="solid")
     thin_border = Border(bottom=Side(style="thin"))
@@ -123,7 +131,7 @@ def write_xlsx(records, xlsx_path):
 
     # Datenzeilen
     for row_idx, rec in enumerate(records, start=2):
-        for col_idx, (csv_col, _) in enumerate(BASE_FIELDS, start=1):
+        for col_idx, (csv_col, _) in enumerate(base_fields, start=1):
             value = rec.get(csv_col, "")
             transform = FIELD_TRANSFORMS.get(csv_col)
             if transform:
@@ -133,7 +141,7 @@ def write_xlsx(records, xlsx_path):
         answers = parse_answers(rec.get(GRADES_COLUMN, ""))
         answer_dict = dict(answers)
 
-        for col_idx, col_name in enumerate(all_answer_cols, start=len(BASE_FIELDS) + 1):
+        for col_idx, col_name in enumerate(all_answer_cols, start=len(base_fields) + 1):
             value = answer_dict.get(col_name, "")
             try:
                 value = int(value)
@@ -169,7 +177,7 @@ def escape_latex(text):
     return text
 
 
-def write_latex_pdf(records, pdf_path, bildungsgang, verbose=False):
+def write_latex_pdf(records, pdf_path, bildungsgang, verbose=False, is_fg=False):
     """Erzeugt eine LaTeX-Übersichtstabelle als PDF (A4 Querformat)."""
 
     def g(rec, field):
@@ -228,11 +236,33 @@ def write_latex_pdf(records, pdf_path, bildungsgang, verbose=False):
             col3_parts.append(r"Förd.\,X")
         col3 = r" \newline ".join(col3_parts)
 
-        rows.append(f"    {col1} & {col2} & {col3} & & \\\\\n    \\hline")
+        if is_fg:
+            col_sg = g(rec, "Schüler:in abgebende Schule Schulgliederung")
+            rows.append(f"    {col1} & {col2} & {col3} & {col_sg} & & \\\\\n    \\hline")
+        else:
+            rows.append(f"    {col1} & {col2} & {col3} & & \\\\\n    \\hline")
 
     bg_esc = escape_latex(bildungsgang)
     bg_bez = escape_latex(records[0].get("Schüler:in Bildungsgang Bezeichnung", "").strip())
     rows_tex = "\n".join(rows)
+
+    if is_fg:
+        col_spec = r"|L{5.5cm}|L{4.5cm}|L{2cm}|L{1.5cm}|L{2cm}|R|"
+        header_row = (
+            r"\textbf{Name/Adresse} & \textbf{Kontakt} & "
+            r"\textbf{\footnotesize Abschl. \newline Rang \newline vollst.Unterl.} & "
+            r"\textbf{\footnotesize Schulgl.} & "
+            r"\textbf{\footnotesize Zusage/ \newline Absage/ \newline Warteliste} & "
+            r"\textbf{Bemerkungen} \\"
+        )
+    else:
+        col_spec = r"|L{5.5cm}|L{4.5cm}|L{2cm}|L{2cm}|R|"
+        header_row = (
+            r"\textbf{Name/Adresse} & \textbf{Kontakt} & "
+            r"\textbf{\footnotesize Abschl. \newline Rang \newline vollst.Unterl.} & "
+            r"\textbf{\footnotesize Zusage/ \newline Absage/ \newline Warteliste} & "
+            r"\textbf{Bemerkungen} \\"
+        )
 
     tex = rf"""\documentclass[a4paper,landscape,10pt]{{article}}
 \usepackage[left=1.5cm,right=1.5cm,top=2cm,bottom=1.5cm]{{geometry}}
@@ -257,13 +287,13 @@ def write_latex_pdf(records, pdf_path, bildungsgang, verbose=False):
 \newcolumntype{{L}}[1]{{>{{\raggedright\arraybackslash}}p{{#1}}}}
 \newcolumntype{{R}}{{>{{\raggedright\arraybackslash}}X}}
 
-\begin{{xltabular}}{{\textwidth}}{{|L{{5.5cm}}|L{{4.5cm}}|L{{2cm}}|L{{2cm}}|R|}}
+\begin{{xltabular}}{{\textwidth}}{{{col_spec}}}
 \hline
-\textbf{{Name/Adresse}} & \textbf{{Kontakt}} & \textbf{{\footnotesize Abschl. \newline Rang \newline vollst.Unterl.}} & \textbf{{\footnotesize Zusage/ \newline Absage/ \newline Warteliste}} & \textbf{{Bemerkungen}} \\
+{header_row}
 \hline
 \endfirsthead
 \hline
-\textbf{{Name/Adresse}} & \textbf{{Kontakt}} & \textbf{{\footnotesize Abschl. \newline Rang \newline vollst.Unterl.}} & \textbf{{\footnotesize Zusage/ \newline Absage/ \newline Warteliste}} & \textbf{{Bemerkungen}} \\
+{header_row}
 \hline
 \endhead
 \hline
@@ -393,15 +423,17 @@ def process_csv(csv_path, verbose=False):
             r.get("Schüler:in Vorname", "").lower(),
         ))
 
+        is_fg = bildungsgang.startswith("FG")
+
         # Dateiname: Slash → Dash
         safe_name = bildungsgang.replace("/", "-")
         xlsx_path = os.path.join(out_dir, f"{safe_name}.xlsx")
-        n_cols = write_xlsx(group_records, xlsx_path)
+        n_cols = write_xlsx(group_records, xlsx_path, is_fg=is_fg)
         print(f"  -> {safe_name}.xlsx  ({len(group_records)} Bewerber, {n_cols} Noten-Spalten)")
 
         # LaTeX-PDF-Übersicht
         pdf_path = os.path.join(out_dir, f"{safe_name}.pdf")
-        if write_latex_pdf(group_records, pdf_path, bildungsgang, verbose):
+        if write_latex_pdf(group_records, pdf_path, bildungsgang, verbose, is_fg=is_fg):
             print(f"  -> {safe_name}.pdf")
 
         stats.append((bildungsgang, len(group_records)))
